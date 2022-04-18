@@ -6,6 +6,7 @@ import { createFFmpeg } from '@ffmpeg/ffmpeg';
 const ffmpegInstance = createFFmpeg({ log: true });
 let ffmpegLoadingPromise = ffmpegInstance.load();
 
+
 async function getFFmpeg() {
     if (ffmpegLoadingPromise) {
         await ffmpegLoadingPromise;
@@ -25,7 +26,42 @@ const upload = multer({
 
 app.use(cors());
 
-app.post('/thumbnail', upload.single('video'), async (req, res) => {
+app.post('/frames', upload.single('video'), async (req, res) => {
+    const videoData = req.file.buffer;
+
+    const { duration } = req.query;
+
+    const ffmpeg = await getFFmpeg();
+
+    const inputFileName = `input-video`;
+    const outputFileName = `out%d.png`;
+    let outputData = [];
+
+    ffmpeg.FS('writeFile', inputFileName, videoData);
+
+    await ffmpeg.run(
+        '-i', inputFileName,
+        '-vf', 'fps=1',
+        outputFileName
+    );
+
+    for (let x = 1; x <= duration; x++) {
+        outputData.push(ffmpeg.FS('readFile', `out${x}.png`))
+    };
+
+    ffmpeg.FS('unlink', inputFileName);
+
+    const blobfiles = [];
+    
+    outputData.forEach(item => {
+        blobfiles.push(Buffer.from(item, 'binary'))
+    });
+
+    res.send(blobfiles);
+});
+
+
+app.post('/trim', upload.single('video'), async (req, res) => {
     try {
         const videoData = req.file.buffer;
         const { startTime, endTime } = req.query;
