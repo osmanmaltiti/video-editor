@@ -30,22 +30,54 @@ app.post('/frames', upload.single('video'), async (req, res) => {
     const videoData = req.file.buffer;
 
     const { duration } = req.query;
-
+    console.log(Math.floor(duration))
     const ffmpeg = await getFFmpeg();
 
     const inputFileName = `input-video`;
     const outputFileName = `out%d.png`;
     let outputData = [];
+    
+    let count= 0;
+    
+    if(Math.floor(duration) <= 10){
+        count = Math.floor(duration)
+    } else {
+        count = 9
+    }
+
+    let framesPerSecond = 0;
+
+    if (Math.floor(duration) <= 10 ) {
+        framesPerSecond = 1
+    } else if (Math.floor(duration) <= 15){
+        framesPerSecond = 1
+    } else if (Math.floor(duration) < 20){
+        framesPerSecond = 1/1.5
+    } else if (Math.floor(duration) < 30){
+        framesPerSecond = 1/2
+    } else if (Math.floor(duration) < 40){
+        framesPerSecond = 1/2.5
+    } else if (Math.floor(duration) < 45){
+        framesPerSecond = 1/3
+    } else if (Math.floor(duration) < 50){
+        framesPerSecond = 1/3.5
+    } else if (Math.floor(duration) < 55){
+        framesPerSecond = 1/4
+    } else if (Math.floor(duration) < 60){
+        framesPerSecond = 1/4.5
+    } else if (Math.floor(duration) < 65){
+        framesPerSecond = 1/5
+    }
 
     ffmpeg.FS('writeFile', inputFileName, videoData);
 
     await ffmpeg.run(
         '-i', inputFileName,
-        '-vf', 'fps=1',
+        '-vf', 'fps=' + framesPerSecond,
         outputFileName
     );
 
-    for (let x = 1; x <= duration; x++) {
+    for (let x = 1; x <= count; x++) {
         outputData.push(ffmpeg.FS('readFile', `out${x}.png`))
     };
 
