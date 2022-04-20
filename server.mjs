@@ -2,10 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { createFFmpeg } from '@ffmpeg/ffmpeg';
+import PQueue from 'p-queue';
 
 const ffmpegInstance = createFFmpeg({ log: true });
 let ffmpegLoadingPromise = ffmpegInstance.load();
 
+const requestQueue = new PQueue({ concurrency: 1 });
 
 async function getFFmpeg() {
     if (ffmpegLoadingPromise) {
@@ -69,26 +71,26 @@ app.post('/frames', upload.single('video'), async (req, res) => {
         framesPerSecond = 1/5
     }
 
-    ffmpeg.FS('writeFile', inputFileName, videoData);
+    await requestQueue.add(async () => {
+        ffmpeg.FS('writeFile', inputFileName, videoData);
 
-    await ffmpeg.run(
-        '-i', inputFileName,
-        '-vf', 'fps=' + framesPerSecond,
-        outputFileName
-    );
+        await ffmpeg.run(
+            '-i', inputFileName,
+            '-vf', 'fps=' + framesPerSecond,
+            outputFileName
+        );
 
-    for (let x = 1; x <= count; x++) {
-        outputData.push(ffmpeg.FS('readFile', `out${x}.png`))
-    };
+        for (let x = 1; x <= count; x++) {
+            outputData.push(ffmpeg.FS('readFile', `out${x}.png`))
+        };
 
-    ffmpeg.FS('unlink', inputFileName);
-
-    const blobfiles = [];
-    
-    outputData.forEach(item => {
-        blobfiles.push(Buffer.from(item, 'binary'))
+        ffmpeg.FS('unlink', inputFileName);
     });
-
+        const blobfiles = [];
+        
+        outputData.forEach(item => {
+            blobfiles.push(Buffer.from(item, 'binary'))
+        });
     res.send(blobfiles);
 });
 
@@ -97,26 +99,28 @@ app.post('/trim', upload.single('video'), async (req, res) => {
     try {
         const videoData = req.file.buffer;
         const { startTime, endTime } = req.query;
-
+        
         const ffmpeg = await getFFmpeg();
 
         const inputFileName = `input-video`;
         const outputFileName = `output-image.mp4`;
         let outputData = null;
 
-        ffmpeg.FS('writeFile', inputFileName, videoData);
+        await requestQueue.add(async () => {
+            ffmpeg.FS('writeFile', inputFileName, videoData);
 
-        await ffmpeg.run(
-            '-i', inputFileName,
-            '-ss', startTime,
-            '-to', endTime,
-            '-c:v', 'copy',
-            outputFileName
-        );
+            await ffmpeg.run(
+                '-i', inputFileName,
+                '-ss', startTime,
+                '-to', endTime,
+                '-c:v', 'copy',
+                outputFileName
+            );
 
-        outputData = ffmpeg.FS('readFile', outputFileName);
-        ffmpeg.FS('unlink', inputFileName);
-        ffmpeg.FS('unlink', outputFileName);
+            outputData = ffmpeg.FS('readFile', outputFileName);
+            ffmpeg.FS('unlink', inputFileName);
+            ffmpeg.FS('unlink', outputFileName);
+        });
 
         res.writeHead(200, {
             'Content-Type': 'video/mp4',
