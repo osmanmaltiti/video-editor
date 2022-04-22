@@ -85,6 +85,10 @@ app.post('/frames', upload.single('video'), async (req, res) => {
         };
 
         ffmpeg.FS('unlink', inputFileName);
+
+        for (let x = 1; x <= count; x++) {
+            ffmpeg.FS('unlink', `out${x}.png`);
+        };
     });
         const blobfiles = [];
         
@@ -103,10 +107,9 @@ app.post('/trim', upload.single('video'), async (req, res) => {
         const ffmpeg = await getFFmpeg();
 
         const inputFileName = `input-video`;
-        const outputFileName = `output-image.mp4`;
+        const outputFileName = `output-image.webm`;
         let outputData = null;
 
-        await requestQueue.add(async () => {
             ffmpeg.FS('writeFile', inputFileName, videoData);
 
             await ffmpeg.run(
@@ -114,16 +117,17 @@ app.post('/trim', upload.single('video'), async (req, res) => {
                 '-ss', startTime,
                 '-to', endTime,
                 '-c:v', 'copy',
-                outputFileName
+                '-c:a', 'copy',
+                outputFileName,
+                
             );
 
             outputData = ffmpeg.FS('readFile', outputFileName);
             ffmpeg.FS('unlink', inputFileName);
             ffmpeg.FS('unlink', outputFileName);
-        });
 
         res.writeHead(200, {
-            'Content-Type': 'video/mp4',
+            'Content-Type': 'video/webm',
             'Content-Disposition': `attachment;filename=${outputFileName}`,
             'Content-Length': outputData.length
         });
